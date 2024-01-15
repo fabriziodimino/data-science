@@ -1,0 +1,638 @@
+---
+title: "problems"
+author: "fabrizio dimino"
+date: "2023-10-17"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup}
+library(dplyr)
+setwd('C:/Users/fdimino/OneDrive/Desktop/Courses/FA582 data science/labs/second')
+fundamentals <- read.csv('fundamentals.csv')
+securities <- read.csv('securities.csv')
+names(fundamentals) <- tolower(names(fundamentals))
+names(securities) <- tolower(names(securities))
+```
+
+## Preprocess data
+
+```{r setup1}
+fundamentals$period.ending <- ifelse(grepl('2014', fundamentals$period.ending), fundamentals$period.ending, NA)
+fundamentals <- na.omit(fundamentals)
+securities$date.first.added <- as.Date(securities$date.first.added)
+securities <- na.omit(securities)
+securities <- securities %>%
+  filter(securities$ticker.symbol %in% fundamentals$ticker.symbol)
+dim(securities)
+fundamentals <- fundamentals[1:100,]
+variables <- c('ticker.symbol', 'period.ending', 'after.tax.roe', 'cash.ratio', 'current.ratio', 'pre.tax.margin',
+               'pre.tax.roe', 'profit.margin', 'quick.ratio', 'total.assets', 'total.liabilities', 'earnings.before.tax')
+fundamentals <- subset(fundamentals, select = variables)
+securities <- securities[order(securities$ticker.symbol), ]
+fundamentals <- fundamentals[order(fundamentals$ticker.symbol),]
+fundamentals[,3:12] <- sapply(fundamentals[,3:12], FUN = function(x) (x - mean(x)) / sd(x))
+companies <- fundamentals[,3:12]
+rownames(companies) <- fundamentals[,1]
+```
+
+## Lp Norm function
+
+```{r setup2}
+Lp_norm <- function(p) {
+  Lp_norm <- c()
+  for (i in 1:100) {
+    for (j in 1:100) {
+      Lp_norm <- c(Lp_norm, sum(abs(companies[i,] - companies[j,])^p)^(1/p))
+    }
+  }
+  Lp_norm <- matrix(Lp_norm, nrow = 100, byrow = T)  
+  Lp_norm <- data.frame(Lp_norm)
+  colnames(Lp_norm) <- rownames(companies)
+  rownames(Lp_norm) <- rownames(companies)
+  return(Lp_norm)
+}
+Lp_norm_1 <- Lp_norm(p = 1)
+Lp_norm_2 <- Lp_norm(p = 2)
+Lp_norm_3 <- Lp_norm(p = 3)
+Lp_norm_10 <- Lp_norm(p = 10)
+
+bottom_10<-function(quantity){
+  x<-sort(unlist(quantity))
+  y<-tail(x,20)
+  z<-names(y)
+  a<-gsub("[0-9]", "", names(y))
+  a<-matrix(a,ncol=2,byrow=T)
+  a<-data.frame(a)
+  for (i in 1:10){
+    a$X3[i]<-quantity[a$X1[i],a$X2[i]]
+  }
+  return(a)
+}
+
+top_10<-function(quantity){
+  x<-sort(unlist(quantity))
+  x<-x[x!=0]
+  y<-head(x,20)
+  z<-names(y)
+  a<-gsub("[0-9]", "", names(y))
+  a<-matrix(a,ncol=2,byrow=T)
+  a<-data.frame(a)
+  for (i in 1:10){
+    a$X3[i]<-quantity[a$X1[i],a$X2[i]]
+  }
+  return(a)
+}
+
+bottom_10(Lp_norm_1)
+top_10(Lp_norm_1)
+
+
+bottom_10(Lp_norm_2)
+top_10(Lp_norm_2)
+
+bottom_10(Lp_norm_3)
+top_10(Lp_norm_3)
+
+bottom_10(Lp_norm_10)
+top_10(Lp_norm_10)
+```
+
+## Minkowski function
+
+```{r setup3}
+weights <- runif(10, min = 0, max = 1)
+Minkowski<-function(p){
+  Minkowski<-c()
+  for (i in 1:100){
+    for (j in 1:100){
+      Minkowski<- c(Minkowski, sum(weights*abs(companies[i,]-companies[j,])^p)^(1/p))
+    }
+  }
+  Minkowski<-matrix(Minkowski,nrow=100,byrow=T)  
+  Minkowski<-data.frame(Minkowski)
+  colnames(Minkowski)<-rownames(companies)
+  rownames(Minkowski)<-rownames(companies)
+  return(Minkowski)
+}
+
+Minkowski_1<-Minkowski(p=1)
+Minkowski_2<-Minkowski(p=2)
+Minkowski_3<-Minkowski(p=3)
+Minkowski_10<-Minkowski(p=10)
+
+
+bottom_10(Minkowski_1)
+top_10(Minkowski_1)
+
+bottom_10(Minkowski_2)
+top_10(Minkowski_2)
+
+bottom_10(Minkowski_3)
+top_10(Minkowski_3)
+
+bottom_10(Minkowski_10)
+top_10(Minkowski_10)
+```
+
+## Match-Based function
+
+```{r setup4}
+df<-sapply(companies,FUN=function(x) cut(x,c(quantile(x,0), quantile(x,0.25),quantile(x,0.50),
+                                        quantile(x,0.75),quantile(x,1)),include.lowest=T))
+df<-data.frame(df)
+for (i in 1:10){
+  df[,i]<-factor(df[,i])
+  levels<-levels(df[,i])
+  start_interv <- as.numeric(sapply(levels, function(x) {
+    if (substring(x, 1, 1) == "(") {
+      return(as.numeric(sub("^\\((.*?),.*\\]", "\\1", x)))
+    } else if (substring(x, 1, 1) == "[") {
+      return(as.numeric(sub("^\\[(.*?),.*\\]", "\\1", x)))
+    }
+  }))
+  levels_ordered <- levels[order(start_interv)]
+  df[,i]<-factor(df[,i],levels = levels_ordered)
+}
+
+similarity<-function(p){
+  similarity<-matrix(NA,nrow=100,ncol=100)
+  rownames(similarity)<-rownames(companies)
+  colnames(similarity)<-rownames(companies)
+  for (i in 1:100){
+    for (j in 1:100){
+      match<-c()
+      for (z in 1:10){
+        if (as.numeric(df[i,z])==1){
+          quartile<-0.25}
+        else if (as.numeric(df[i,z])==2){
+          quartile<-0.5}
+        else if (as.numeric(df[i,z])==3){
+          quartile<-0.75}
+        else {
+          quartile<-1}
+        if (df[i,z]==df[j,z]){
+          diff<-quantile(companies[,z],quartile)- quantile(companies[,z],quartile-0.25)
+          match<-c(match, (1 - (abs(companies[i,z]-companies[j,z])/diff))^p)}}
+      similarity[i,j]<-(sum(match))^1/p
+    }
+  }
+  return(data.frame(similarity))
+}
+
+similarity<-similarity(1)
+subset(head(similarity), select=1:10)
+
+bottom_10<-function(quantity){
+  x<-sort(unlist(quantity))
+  x<-x[x!=10]
+  y<-tail(x,20)
+  z<-names(y)
+  a<-gsub("[0-9]", "", names(y))
+  a<-matrix(a,ncol=2,byrow=T)
+  a<-data.frame(a)
+  for (i in 1:10){
+    a$X3[i]<-quantity[a$X1[i],a$X2[i]]
+  }
+  return(a)
+}
+
+top_10<-function(quantity){
+  x<-sort(unlist(quantity))
+  y<-x[x==0]
+  z<-names(y)
+  a<-gsub("[0-9]", "", names(y))
+  b<-as.numeric(gsub("[A-Z]", "", names(y)))
+  b<-rownames(quantity)[b]
+  a<-cbind(a,b)
+  res<-data.frame(a)
+  for (i in 1:nrow(res)){
+    res$zeros[i]<-quantity[res$a[i],res$b[i]]}
+  return(res)
+}
+
+bottom_10(similarity)
+top<-top_10(similarity)
+top$pair <- apply(top, 1, function(x) paste(sort(x), collapse="-"))
+top <-top[!duplicated(top$pair),]
+top<-subset(top,select=c(1,2,3))
+head(top,10)
+```
+
+## Mahalanobis distance
+
+```{r setup5}
+df2<-as.matrix(companies)
+matrix_var_cov <- cov(df2)
+Maha<-function(){
+  Maha<-c()
+  for (i in 1:100){
+    for (j in 1:100){
+      Maha<- c(Maha, sqrt((df2[i,]-df2[j,]) %*%matrix_var_cov%*%(df2[i,]-df2[j,])))
+    }
+  }
+  Maha<-matrix(Maha,nrow=100,byrow=T)  
+  Maha<-data.frame(Maha)
+  colnames(Maha)<-rownames(companies)
+  rownames(Maha)<-rownames(companies)
+  return(Maha)
+}
+Maha<-Maha()
+subset(head(Maha), select=1:10)
+
+bottom_10<-function(quantity){
+  x<-sort(unlist(quantity))
+  y<-tail(x,20)
+  z<-names(y)
+  a<-gsub("[0-9]", "", names(y))
+  a<-matrix(a,ncol=2,byrow=T)
+  a<-data.frame(a)
+  for (i in 1:10){
+    a$X3[i]<-quantity[a$X1[i],a$X2[i]]
+  }
+  return(a)
+}
+
+top_10<-function(quantity){
+  x<-sort(unlist(quantity))
+  x<-x[x!=0]
+  y<-head(x,20)
+  z<-names(y)
+  a<-gsub("[0-9]", "", names(y))
+  a<-matrix(a,ncol=2,byrow=T)
+  a<-data.frame(a)
+  for (i in 1:10){
+    a$X3[i]<-quantity[a$X1[i],a$X2[i]]
+  }
+  return(a)
+}
+
+bottom_10(Maha)
+top_10(Maha)
+```
+
+##Similarity: overlap measure
+
+```{r setup6}
+rownames(securities)<-securities[,1]
+securities<-securities[1:100,4:6]
+
+
+overlap<-function(){
+  overlap<-matrix(NA,nrow=100,ncol=100)
+  rownames(overlap)<-rownames(securities)
+  colnames(overlap)<-rownames(securities)
+  for (i in 1:100){
+    for (j in 1:100){
+      match<-c()
+      for (z in 1:3){
+        if (securities[i,z]==securities[j,z]){
+          match<-c(match, 1)}
+        overlap[i,j]<-sum(match)}
+    }
+  }
+  return(data.frame(overlap))
+}
+
+overlap<-overlap()
+subset(head(overlap), select=1:10)
+
+top_10<-function(quantity){
+  x<-sort(unlist(quantity))
+  y<-head(x,20)
+  z<-names(y)
+  a<-gsub("[0-9]", "", names(y))
+  b<-as.numeric(gsub("[A-Z]", "", names(y)))
+  b<-rownames(quantity)[b]
+  a<-cbind(a,b)
+  res<-data.frame(a)
+  for (i in 1:nrow(res)){
+    res$zeros[i]<-quantity[res$a[i],res$b[i]]}
+  return(res)
+}
+
+bottom_10<-function(quantity){
+  x<-sort(unlist(quantity))
+  a<-gsub("[0-9]", "", names(x))
+  b<-as.numeric(gsub("[A-Z]", "", names(x)))
+  b<-rownames(quantity)[b]
+  p<-cbind(a,b)
+  p<-p[a!=b,]
+  y<-tail(p,20)
+  res<-data.frame(y)
+  for (i in 1:nrow(res)){
+    res$zeros[i]<-quantity[res$a[i],res$b[i]]}
+  return(res)
+}
+
+bottom<-bottom_10(overlap)
+bottom$pair <- apply(bottom, 1, function(x) paste(sort(x), collapse="-"))
+bottom <-bottom[!duplicated(bottom$pair),]
+bottom<-subset(bottom,select=c(1,2,3))
+tail(bottom,10)
+
+top<-top_10(overlap)
+top$pair <- apply(top, 1, function(x) paste(sort(x), collapse="-"))
+top <-top[!duplicated(top$pair),]
+top<-subset(top,select=c(1,2,3))
+head(top,10)
+```
+
+##Similarity: inverse frequency
+
+```{r setup7}
+inverse<-function(){
+  inverse<-matrix(NA,nrow=100,ncol=100)
+  rownames(inverse)<-rownames(securities)
+  colnames(inverse)<-rownames(securities)
+  for (i in 1:100){
+    for (j in 1:100){
+      match<-c()
+      for (z in 1:3){
+        if (securities[i,z]==securities[j,z]){
+          n<-(sum(securities[,z]==securities[i,z])/nrow(securities))^2
+          match<-c(match, 1/n)}
+        inverse[i,j]<-sum(match)}
+    }
+  }
+  return(data.frame(inverse))
+}
+
+inverse<-inverse()
+subset(head(inverse), select=1:10)
+
+bottom_10<-function(quantity){
+  x<-sort(unlist(quantity))
+  x<-x[1:9900]
+  y<-tail(x,20)
+  z<-names(y)
+  a<-gsub("[0-9]", "", names(y))
+  b<-as.numeric(gsub("[A-Z]", "", names(y)))
+  b<-rownames(quantity)[b]
+  a<-cbind(a,b)
+  a<-data.frame(a)
+  for (i in 1:nrow(a)){
+    a$zeros[i]<-quantity[a$a[i],a$b[i]]}
+  return(a)
+}
+
+
+bottom<-bottom_10(inverse)
+bottom$pair <- apply(bottom, 1, function(x) paste(sort(x), collapse="-"))
+bottom <-bottom[!duplicated(bottom$pair),]
+bottom<-subset(bottom,select=c(1,2,3))
+bottom
+
+top_n<-function(quantity){
+  x<-sort(unlist(quantity))
+  y<-head(x,20)
+  z<-names(y)
+  a<-gsub("[0-9]", "", names(y))
+  b<-as.numeric(gsub("[A-Z]", "", names(y)))
+  b<-rownames(quantity)[b]
+  a<-cbind(a,b)
+  res<-data.frame(a)
+  for (i in 1:nrow(res)){
+    res$zeros[i]<-quantity[res$a[i],res$b[i]]}
+  return(res)
+}
+
+top<-top_n(inverse)
+top$pair <- apply(top, 1, function(x) paste(sort(x), collapse="-"))
+top <-top[!duplicated(top$pair),]
+top<-subset(top,select=c(1,2,3))
+head(top,10)
+```
+
+##Similarity: Goodall
+
+```{r setup8}
+goodall<-function(){
+  goodall<-matrix(NA,nrow=100,ncol=100)
+  rownames(goodall)<-rownames(securities)
+  colnames(goodall)<-rownames(securities)
+  for (i in 1:100){
+    for (j in 1:100){
+      match<-c()
+      for (z in 1:3){
+        if (securities[i,z]==securities[j,z]){
+          n<-(sum(securities[,z]==securities[i,z])/nrow(securities))^2
+          match<-c(match, 1-n)}
+        goodall[i,j]<-sum(match)}
+    }
+  }
+  return(data.frame(goodall))
+}
+
+goodall<-goodall()
+subset(head(goodall), select=1:10)
+
+bottom_10<-function(quantity){
+  x<-sort(unlist(quantity))
+  a<-gsub("[0-9]", "", names(x))
+  b<-as.numeric(gsub("[A-Z]", "", names(x)))
+  b<-rownames(quantity)[b]
+  p<-cbind(a,b)
+  p<-p[a!=b,]
+  y<-tail(p,20)
+  res<-data.frame(y)
+  for (i in 1:nrow(res)){
+    res$zeros[i]<-quantity[res$a[i],res$b[i]]}
+  return(res)
+}
+
+
+bottom<-bottom_10(goodall)
+bottom$pair <- apply(bottom, 1, function(x) paste(sort(x), collapse="-"))
+bottom <-bottom[!duplicated(bottom$pair),]
+bottom<-subset(bottom,select=c(1,2,3))
+tail(bottom,10)
+
+top_n<-function(quantity){
+  x<-sort(unlist(quantity))
+  y<-head(x,20)
+  z<-names(y)
+  a<-gsub("[0-9]", "", names(y))
+  b<-as.numeric(gsub("[A-Z]", "", names(y)))
+  b<-rownames(quantity)[b]
+  a<-cbind(a,b)
+  res<-data.frame(a)
+  for (i in 1:nrow(res)){
+    res$zeros[i]<-quantity[res$a[i],res$b[i]]}
+  return(res)
+}
+
+top<-top_n(goodall)
+top$pair <- apply(top, 1, function(x) paste(sort(x), collapse="-"))
+top <-top[!duplicated(top$pair),]
+top<-subset(top,select=c(1,2,3))
+head(top,10)
+```
+
+##Mixed data: categorical and quantitative
+
+```{r setup9}
+df.all<-cbind(securities,companies)
+
+overall<-function(){
+  overall<-matrix(NA,nrow=100,ncol=100)
+  lambda<-0.5
+  rownames(overall)<-rownames(df.all)
+  colnames(overall)<-rownames(df.all)
+  for (i in 1:100){
+    for (j in 1:100){
+      match<-c()
+      for (z in 1:3){
+        if (df.all[i,z]==df.all[j,z]){
+          match<-c(match, 1*(1-lambda))}}
+      for (z in 4:13){
+        if (df.all[i,z]==df.all[j,z]){
+          match<-c(match, 1*(lambda))}}
+      overall[i,j]<-sum(match)
+      }
+    }
+  return(data.frame(overall))
+}
+
+overall<-overall()
+subset(head(overall), select=1:10)
+
+top_10<-function(quantity){
+  x<-sort(unlist(quantity))
+  y<-head(x,20)
+  z<-names(y)
+  a<-gsub("[0-9]", "", names(y))
+  b<-as.numeric(gsub("[A-Z]", "", names(y)))
+  b<-rownames(quantity)[b]
+  a<-cbind(a,b)
+  res<-data.frame(a)
+  for (i in 1:nrow(res)){
+    res$zeros[i]<-quantity[res$a[i],res$b[i]]}
+  return(res)
+}
+
+top<-top_10(overall)
+top$pair <- apply(top, 1, function(x) paste(sort(x), collapse="-"))
+top <-top[!duplicated(top$pair),]
+top<-subset(top,select=c(1,2,3))
+head(top,10)
+
+bottom_10<-function(quantity){
+  x<-sort(unlist(quantity))
+  x<-x[1:9900]
+  y<-tail(x,20)
+  z<-names(y)
+  a<-gsub("[0-9]", "", names(y))
+  b<-as.numeric(gsub("[A-Z]", "", names(y)))
+  b<-rownames(quantity)[b]
+  a<-cbind(a,b)
+  a<-data.frame(a)
+  for (i in 1:nrow(a)){
+    a$zeros[i]<-quantity[a$a[i],a$b[i]]}
+  return(a)
+}
+
+bottom<-bottom_10(overall)
+bottom$pair <- apply(bottom, 1, function(x) paste(sort(x), collapse="-"))
+bottom <-bottom[!duplicated(bottom$pair),]
+bottom<-subset(bottom,select=c(1,2,3))
+tail(bottom,10)
+
+```
+
+##Mixed normalized data: categorical and quantitative
+
+```{r setup10}
+df.all<-cbind(securities,companies)
+overall_cat<-function(){
+  overall_norm<-matrix(NA,nrow=100,ncol=100)
+  lambda<-0.6
+  rownames(overall_norm)<-rownames(df.all)
+  colnames(overall_norm)<-rownames(df.all)
+  for (i in 1:100){
+    for (j in 1:100){
+      match<-c()
+      for (z in 1:3){
+        if (df.all[i,z]==df.all[j,z]){
+          match<-c(match, 1*(1-lambda))}}
+      overall[i,j]<-sum(match)
+    }
+  }
+  return(data.frame(overall))
+}
+
+
+overall_num<-function(){
+  overall_norm<-matrix(NA,nrow=100,ncol=100)
+  lambda<-0.6
+  rownames(overall_norm)<-rownames(df.all)
+  colnames(overall_norm)<-rownames(df.all)
+  for (i in 1:100){
+    for (j in 1:100){
+      match<-c()
+      for (z in 4:13){
+        if (df.all[i,z]==df.all[j,z]){
+          match<-c(match, 1*(lambda))}}
+      overall[i,j]<-sum(match)
+    }
+  }
+  return(data.frame(overall))
+}
+
+overall_num<-overall_num()
+overall_cat<-overall_cat()
+
+a<-gsub("[0-9]", "", names(sort(unlist(overall_num))))
+b<-as.numeric(gsub("[A-Z]", "", names(unlist(overall_num))))
+b<-rownames(securities)[b]
+res<-cbind(a,b)
+res<-data.frame(res)
+res<-res[1:9900,]
+for (i in 1:nrow(res)){
+  res$zeros[i]<-overall_num[res$a[i],res$b[i]]}
+num_std<-sd(res$zeros)
+
+a<-gsub("[0-9]", "", names(sort(unlist(overall_cat))))
+b<-as.numeric(gsub("[A-Z]", "", names(unlist(overall_cat))))
+b<-rownames(securities)[b]
+res<-cbind(a,b)
+res<-data.frame(res)
+res<-res[1:9900,]
+cat_std<-sd(unlist(overall_cat))
+
+overall_norm<-function(){
+  overall_norm<-matrix(NA,nrow=100,ncol=100)
+  lambda<-0.6
+  rownames(overall_norm)<-rownames(df.all)
+  colnames(overall_norm)<-rownames(df.all)
+  for (i in 1:100){
+    for (j in 1:100){
+      match<-c()
+      for (z in 1:3){
+        if (df.all[i,z]==df.all[j,z]){
+          match<-c(match, 1*(1-lambda)/cat_std)}}
+      for (z in 4:13){
+        if (df.all[i,z]==df.all[j,z]){
+          match<-c(match, 1*(lambda)/num_std)}}
+      overall_norm[i,j]<-sum(match)
+    }
+  }
+  return(data.frame(overall_norm))
+}
+
+overall_norm<-overall_norm()
+
+bottom<-bottom_10(overall_norm)
+bottom$pair <- apply(bottom, 1, function(x) paste(sort(x), collapse="-"))
+bottom <-bottom[!duplicated(bottom$pair),]
+bottom<-subset(bottom,select=c(1,2,3))
+tail(bottom,10)
+
+top<-top_10(overall_norm)
+top$pair <- apply(top, 1, function(x) paste(sort(x), collapse="-"))
+top <-top[!duplicated(top$pair),]
+top<-subset(top,select=c(1,2,3))
+head(top,10)
+
+```

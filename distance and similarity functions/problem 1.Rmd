@@ -1,0 +1,139 @@
+---
+title: "Problem 1"
+author: "Fabrizio Dimino"
+date: "2023-10-09"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+library(rvest)     
+library(ggplot2) 
+```
+
+## Introduction
+In this analysis, we will retrieve information about the S&P 500 companies from Wikipedia, clean and preprocess the data, and perform exploratory data analysis (EDA). We will visualize key statistics related to the companies' GICS sectors, year added to the index, and year of foundation.
+
+```{r setup1, echo=T}
+# Define the base URL
+ubase <- 'https://en.wikipedia.org/'
+
+# Construct the URL for S&P 500 companies page
+url <- paste(ubase, 'wiki/List_of_S%26P_500_companies', sep = '')
+
+# Check the class of the URL
+class(url)
+
+# Get information from the S&P 500 page
+path <- read_html(url)
+tables <- html_nodes(path, css = "table")
+sp500 <- html_table(tables[[1]], fill = TRUE)
+summary(sp500)
+head(sp500)
+```
+
+## Data Cleaning and Preprocessing
+Let's start by cleaning and preprocessing the retrieved data.
+
+```{r setup2, echo=T}
+# Clean column names by replacing spaces and hyphens with underscores and converting to lowercase
+names(sp500) <- gsub(' ', '_', names(sp500))
+names(sp500) <- gsub('-', '_', names(sp500))
+names(sp500) <- tolower(names(sp500))
+
+# Extract unique values in the 'gics_sector' column
+unique(sp500$gics_sector)
+
+# Convert the 'date_added' column to a Date object
+sp500$date_added <- as.Date(sp500$date_added)
+
+# Remove rows with missing values in the 'date_added' column
+missing_values <- colSums(is.na(sp500))
+missing_values
+sp500 <- sp500[!is.na(sp500$date_added),]
+
+# Convert 'security' and 'gics_sector' columns to factors
+sp500$security <- as.factor(sp500$security)
+sp500$gics_sector <- as.factor(sp500$gics_sector)
+
+# Sort the dataframe by the 'symbol' column
+sp500 <- sp500[order(sp500$symbol), ]
+head(sp500$symbol)
+
+```
+
+## Exploratory Data Analysis (EDA)
+GICS Sector Analysis
+Let's analyze the distribution of companies across GICS sectors.
+
+```{r setup3, echo=T}
+# Create a table of counts for 'gics_sector'
+sp500_sectors <- table(sp500$gics_sector)
+
+# Create a dataframe for 'gics_sector' counts
+sector_counts <- data.frame(GICS_Sector = names(sp500_sectors), Count = as.factor(sp500_sectors))
+
+# Create a bar plot for 'gics_sector' counts
+ggplot(sector_counts, aes(x = GICS_Sector, y = Count)) +
+  geom_bar(stat = "identity") +
+  labs(title = "GICS Sector") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Year Added Analysis
+Moreover, let's analyze the distribution of companies based on the year they were added to the S&P 500 index.
+
+```{r setup4, echo=T}
+# Create a new column 'year_added' from 'date_added' and categorize it into time periods
+sp500$year_added <- format(sp500$date_added, format = '%Y')
+sp500$year_added <- as.numeric(sp500$year_added)
+
+# Create categories for 'year_added'
+years <- cut(sp500$year_added, c(1950, 1970, 1990, 2010, Inf))
+levels(years) <- c("1950-1970", "1970-1990", "1990-2010", 'After 2010')
+
+# Create a table of counts for 'year_added'
+sp500_years <- table(years)
+sp500_years
+
+# Create a dataframe for 'year_added' counts
+years_counts <- data.frame(years = names(sp500_years), Count = as.factor(sp500_years))
+
+# Create a bar plot for 'year_added' counts
+ggplot(years_counts, aes(x = years, y = Count)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Years Added") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Year Founded Analysis
+Finally, let's analyze the distribution of companies based on the year they were founded.
+
+```{r setup5, echo=T}
+# Extract the first four characters from the 'founded' column and categorize into year ranges
+cut_founded <- substr(sp500$founded, 1, 4)
+cut_founded <- as.numeric(cut_founded)
+
+# Summary statistics for 'cut_founded'
+summary(cut_founded)
+
+# Create categories for 'cut_founded'
+cut_year_founded <- cut(cut_founded, c(-Inf, 1920, 1940, 1960, 1980, 2000, 2020, Inf))
+levels(cut_year_founded) <- c("Before 1920", "1920-1940", "1940-1960", '1960-1980', '1980-2000', '2000-2020', 'After 2020')
+
+# Create a table of counts for 'year_founded'
+sp500_founded <- table(cut_year_founded)
+sp500_founded
+
+# Create a dataframe for 'year_founded' counts
+founded_counts <- data.frame(years = names(sp500_founded), Count = as.factor(sp500_founded))
+
+# Create a bar plot for 'year_founded' counts
+ggplot(founded_counts, aes(x = years, y = Count)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Year Founded") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+

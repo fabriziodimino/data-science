@@ -8,7 +8,7 @@ con <- dbConnect(RPostgres::Postgres(),
                  host = "127.0.0.1", 
                  port = 5432, 
                  user = "postgres", 
-                 password = 'falesi')
+                 password = '===')
 
 setwd('C:/Users/Public/sql')
 dbWriteTable(con, "new_banks_total_table", read.csv("banks_total_export.csv"))

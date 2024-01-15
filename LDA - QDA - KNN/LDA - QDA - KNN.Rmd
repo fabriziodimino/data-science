@@ -1,0 +1,301 @@
+---
+title: "Lab 3"
+author: "fabrizio dimino"
+date: "2023-11-08"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup}
+setwd('C:/Users/fdimino/OneDrive/Desktop/Courses/FA582 data science/labs/third')
+weekly <- read.csv('Weekly.csv')
+# Point A: Data Summary and Visualizations
+names(weekly)
+weekly$Direction<-as.factor(weekly$Direction)
+contrasts(weekly$Direction)
+summary(weekly)
+par(mfrow = c(2, 3))
+
+# Scatterplot of "Today" vs. "Lag1" with linear regression line
+plot(Today ~ Lag1, col = "blue", data = weekly)
+simplelm1 <- lm(Today ~ Lag1, data = weekly)
+abline(simplelm1, lwd = 3, col = "yellow")
+title("Today vs. Lag1")
+# Scatterplot of "Today" vs. "Lag2" with linear regression line
+plot(Today ~ Lag2, col = "blue", data = weekly)
+simplelm2 <- lm(Today ~ Lag2, data = weekly)
+abline(simplelm2, lwd = 3, col = "yellow")
+title("Today vs. Lag2")
+# Scatterplot of "Today" vs. "Lag3" with linear regression line
+plot(Today ~ Lag3, col = "blue", data = weekly)
+simplelm3 <- lm(Today ~ Lag3, data = weekly)
+abline(simplelm3, lwd = 3, col = "yellow")
+title("Today vs. Lag3")
+# Scatterplot of "Today" vs. "Lag4" with linear regression line
+plot(Today ~ Lag4, col = "blue", data = weekly)
+simplelm4 <- lm(Today ~ Lag4, data = weekly)
+abline(simplelm4, lwd = 3, col = "yellow")
+title("Today vs. Lag4")
+# Scatterplot of "Today" vs. "Lag5" with linear regression line
+plot(Today ~ Lag5, col = "blue", data = weekly)
+simplelm5 <- lm(Today ~ Lag5, data = weekly)
+abline(simplelm5, lwd = 3, col = "yellow")
+title("Today vs. Lag5")
+# Scatterplot of "Today" vs. "Volume" with linear regression line
+plot(Today ~ Volume, col = "blue", data = weekly)
+simplelm6 <- lm(Today ~ Volume, data = weekly)
+abline(simplelm6, lwd = 3, col = "yellow")
+title("Today vs. Volume")
+
+boxplot(Today ~ Direction, data = weekly, xlab = "Direction", ylab = "Today")
+boxplot(Year ~ Direction, data = weekly, xlab = "Direction", ylab = "Year")
+boxplot(Lag2 ~ Direction, data = weekly, xlab = "Direction", ylab = "Lag2")
+boxplot(Lag1 ~ Direction, data = weekly, xlab = "Direction", ylab = "Lag1")
+
+# We can notice notice some patterns, for instance The lag variables have a range of values with the same minimum and maximum values. The median values for these lag variables are close to zero, indicating that they are centered around zero. This suggests that the lag variables may represent changes or differences from previous values.Moreover, the distribution of volume data seems to be positively skewed, with a mean greater than the median.
+# Furthermore, the "Today" variable also has a range of values with the same minimum and maximum values as the lag variables. The median value for "Today" is close to zero.
+#With data visualizations, we can notice some association, for instance, between year and volume, and also between direction and lag2
+
+# Point B: Logistic Regression
+glm.weekly.direction = glm(Direction ~ Lag1 + Lag2 + Lag3 + Lag4 + Lag5 + Volume, data = weekly, family = binomial)
+summary(glm.weekly.direction)
+## Lag 2 is significant (alpha = 0.05)
+glm.probs=predict(glm.weekly.direction,newdata = weekly, type="response")
+glm.probs[1:10]
+glm.pred=rep("Down",dim(weekly)[1])
+glm.pred[glm.probs>0.5]="Up"
+summary(as.factor(glm.pred))
+
+# Create the confusion matrix
+table(glm.pred,weekly$Direction)
+mean(glm.pred == weekly$Direction)
+
+## confusion matrix says that the model correctly predicted 'Up' 557 times, 'down' 54 times. 
+# The model incorrectly predicted 'Up' when was 'down' 430 times and 'down' when was 'up' 48 times
+# the overall fraction of correct predictions is 0.5611 which means that the logistic regression model 
+# correctly predicted the direction in 56.11% of the cases.
+```
+
+
+```{r setup 1}
+# Point D: Logistic Regression with Lag2
+library(MASS)
+library(class)
+
+training <- weekly[1:985, ]
+test <- weekly[986:1089, ]
+# Predict the Direction for the testing data
+glm.fit=glm(Direction~Lag2,data=training,family=binomial)
+summary(glm.fit)
+glm.probs=predict(glm.fit,newdata = test, type="response")
+glm.pred=rep("Down",dim(test)[1])
+glm.pred[glm.probs>0.5]="Up"
+
+table(glm.pred,test$Direction)
+mean(glm.pred == test$Direction)
+
+# In this case, confusion matrix says that the model correctly predicted 'up' 56 times, 'down' 9 times
+# while it predicted 5 times 'down' when it was 'up', and 34 times 'up' when was 'down'. The overall fraction of correct predictions is 62.5%
+
+# Point E: Linear Discriminant Analysis (LDA)
+lda.fit = lda(Direction ~ Lag2, data = training, family = binomial)
+lda.pred = predict(lda.fit, test)
+lda.class = lda.pred$class
+table(lda.class, test$Direction)
+lda_correct_predictions <- mean(lda.class == test$Direction)
+lda_correct_predictions
+
+# Point F: Quadratic Discriminant Analysis (QDA)
+qda.fit = qda(Direction ~ Lag2, data = training, family = binomial)
+qda.pred = predict(qda.fit, test)
+qda.class = qda.pred$class
+table(qda.class, test$Direction)
+qda_correct_predictions <- mean(qda.class == test$Direction)
+qda_correct_predictions
+
+# Point G: K-Nearest Neighbors (KNN) with K = 1
+knn.pred = knn(as.matrix(training$Lag2), as.matrix(test$Lag2), training$Direction, k = 1)
+
+knn_confusion_matrix <- table(Predicted = knn.pred, Actual = test$Direction)
+knn_confusion_matrix
+knn_correct_predictions <- mean(knn.pred == test$Direction)
+knn_correct_predictions
+
+# Point H: Comparison of Results
+
+# best results with logistic regression and lda
+```
+
+
+```{r setup2}
+# Point i
+# Experiment with different combinations of predictors, transformations, and interactions for each of the methods.
+
+# Fit logistic regression model with different predictors, including transformations
+logistic_model <- glm(Direction ~ Lag2 + Lag1 + I(Lag2^2), data = training, family = binomial)
+
+# Predict the Direction for the testing data
+predicted <- ifelse(predict(logistic_model, newdata = test, type = "response") > 0.5, "Up", "Down")
+
+confusion_matrix <- table(Actual = test$Direction, Predicted = predicted)
+
+correct_predictions <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+
+# Print the confusion matrix and overall fraction of correct predictions
+confusion_matrix
+cat("Overall Fraction of Correct Predictions (Logistic Regression): ", correct_predictions)
+
+# Fit LDA with different predictors, including transformations
+lda.fit = lda(Direction ~ Lag2 + Lag1 + I(Lag2^2), data = training, family = binomial)
+lda.pred = predict(lda.fit, test)
+lda.class = lda.pred$class
+
+# Calculate confusion matrix and other statistics
+table(lda.class, test$Direction)
+lda_correct_predictions <- mean(lda.class == test$Direction)
+sum(lda.pred$posterior[, 1] >= 0.5)
+sum(lda.pred$posterior[, 1] < 0.5)
+cat("Overall Fraction of Correct Predictions (LDA): ", lda_correct_predictions)
+
+# Fit QDA with different predictors, including transformations
+qda.fit = qda(Direction ~ Lag2 + Lag1 + I(Lag2^2), data = training, family = binomial)
+qda.pred = predict(qda.fit, test)
+qda.class = qda.pred$class
+
+# Calculate confusion matrix and other statistics
+table(qda.class, test$Direction)
+qda_correct_predictions <- mean(qda.class == test$Direction)
+sum(qda.pred$posterior[, 1] >= 0.5)
+sum(qda.pred$posterior[, 1] < 0.5)
+cat("Overall Fraction of Correct Predictions (QDA): ", qda_correct_predictions)
+
+# Using KNN with different predictors and K = 10
+test.x = cbind(test$Lag1, test$Lag2, test$Lag2^2)
+training.x = cbind(training$Lag1, training$Lag2, training$Lag2^2)
+knn.pred = knn(training.x, test.x, training$Direction, k = 10)
+
+# Create the confusion matrix
+knn_confusion_matrix <- table(Predicted = knn.pred, Actual = test$Direction)
+
+# Calculate the overall fraction of correct predictions
+knn_correct_predictions <- mean(knn.pred == test$Direction)
+knn_correct_predictions
+knn_confusion_matrix
+
+# In this case, QDA is the best
+```
+
+## Problem 2
+```{r setup3}
+
+auto <- read.csv('Auto.csv')
+median <- median(auto$mpg)
+
+
+
+# Create a binary variable, mpg01
+auto$mpg01<-0
+auto$mpg01[auto$mpg>median(auto$mpg)]<-1
+auto$mpg01<-as.factor(auto$mpg01)
+
+df <- data.frame(auto)
+
+# Point b: Explore the data graphically
+par(mfrow=c(4, 2))
+par(mar = c(2, 2, 2, 2))
+
+# Scatterplots
+plot(df$mpg01, df$displacement, xlab = "mpg01", ylab = "displacement", main = "Scatterplot: 'displacement' vs. 'mpg01'")
+plot(df$mpg01, df$horsepower, xlab = "mpg01", ylab = "horsepower", main = "Scatterplot: 'horsepower' vs. 'mpg01'")
+plot(df$mpg01, df$cylinders, xlab = "mpg01", ylab = "cylinders", main = "Scatterplot: 'cylinders' vs. 'mpg01'")
+plot(df$mpg01, df$weight, xlab = "mpg01", ylab = "weight", main = "Scatterplot: 'weight' vs. 'mpg01'")
+plot(df$mpg01, df$acceleration, xlab = "mpg01", ylab = "acceleration", main = "Scatterplot: 'acceleration' vs. 'mpg01'")
+plot(df$mpg01, df$year, xlab = "mpg01", ylab = "year", main = "Scatterplot: 'year' vs. 'mpg01'")
+plot(df$mpg01, df$origin, xlab = "mpg01", ylab = "origin", main = "Scatterplot: 'origin' vs. 'mpg01'")
+
+# Boxplots
+par(mfrow=c(4, 2))
+
+boxplot(displacement ~ mpg01, data = df, xlab = "mpg01", ylab = "displacement", main = "Boxplot: 'displacement' vs. 'mpg01'")
+boxplot(horsepower ~ mpg01, data = df, xlab = "mpg01", ylab = "horsepower", main = "Boxplot: 'horsepower' vs. 'mpg01'")
+boxplot(cylinders ~ mpg01, data = df, xlab = "mpg01", ylab = "cylinders", main = "Boxplot: 'cylinders' vs. 'mpg01'")
+boxplot(weight ~ mpg01, data = df, xlab = "mpg01", ylab = "weight", main = "Boxplot: 'weight' vs. 'mpg01'")
+boxplot(acceleration ~ mpg01, data = df, xlab = "mpg01", ylab = "acceleration", main = "Boxplot: 'acceleration' vs. 'mpg01'")
+boxplot(year ~ mpg01, data = df, xlab = "mpg01", ylab = "year", main = "Boxplot: 'year' vs. 'mpg01'")
+boxplot(origin ~ mpg01, data = df, xlab = "mpg01", ylab = "origin", main = "Boxplot: 'origin' vs. 'mpg01'")
+
+# We've identified that "weight" and "horsepower" are the features that appear to be most useful in predicting "mpg01." These features have shown a noticeable separation in scatterplots and boxplots when compared to "mpg01." The separation suggests that there might be a relationship between these features and the binary variable mpg01. Additionally, "acceleration" also seems to provide some useful information, though it may not be as strong as "weight" and "horsepower".
+
+# Point c: Split the data into a training set and a test set
+training <- df[1:196,]
+test <- df[196:392,]
+test$mpg01<-as.factor(test$mpg01)
+training$mpg01<-as.factor(training$mpg01)
+
+# Point d: Perform LDA on the training data
+lda.fit <- lda(mpg01 ~ displacement + horsepower + cylinders + weight, data = training)
+lda.pred <- predict(lda.fit, test)
+lda.class <- lda.pred$class
+
+table(lda.class, test$mpg01)
+lda_correct_predictions <- mean(lda.class == test$mpg01)
+test_error <- mean(lda.class != test$mpg01)
+
+# Display the test error
+cat("Test Error (LDA):", test_error, "\n")
+
+# Point e: Perform QDA on the training data
+qda.fit <- qda(mpg01 ~ displacement + horsepower + cylinders + weight, data = training)
+qda.pred <- predict(qda.fit, test)
+qda.class <- qda.pred$class
+
+table(qda.class, test$mpg01)
+qda_correct_predictions <- mean(qda.class == test$mpg01)
+test_error <- mean(qda.class != test$mpg01)
+
+# Display the test error
+cat("Test Error (QDA):", test_error, "\n")
+
+# Point f: Perform logistic regression on the training data
+glm.mpg01=glm(mpg01~cylinders+weight+horsepower+displacement,data=training,family=binomial)
+summary(glm.mpg01)
+confint(glm.mpg01)
+
+glm.probs=predict(glm.mpg01,newdata = test, type="response")
+glm.pred=rep("0",dim(test)[1])
+glm.pred[glm.probs>0.5]="1"
+
+#confusion matrix
+table(glm.pred,test$mpg01)
+mean(glm.pred == test$mpg01)
+
+#overall error rate
+1-mean(glm.pred == test$mpg01)
+
+
+# Point g: Perform K-Nearest Neighbors (KNN) with different values of k
+fun <- function(k) {
+  test.x <- cbind(test$weight, test$displacement, test$horsepower, test$cylinders)
+  training.x <- cbind(training$weight, training$displacement, training$horsepower, training$cylinders)
+  
+  # Fit the KNN model with the specified k
+  knn.pred <- knn(training.x, test.x, training$mpg01, k = k)
+  
+  # Create the confusion matrix
+  knn_confusion_matrix <- table(Predicted = knn.pred, Actual = test$mpg01)
+  print(knn_confusion_matrix)
+  
+  # Calculate the overall fraction of correct predictions
+  knn_correct_predictions <- mean(knn.pred == test$mpg01)
+  print(paste("Test Error (k =", k, "):", 1 - knn_correct_predictions))
+}
+
+k_1 <- fun(1)
+k_4 <- fun(4)
+k_5 <- fun(5)
+k_6 <- fun(6)
+k_10 <- fun(10)
+
+# The best is k=5, with test error 0.1370
+```
